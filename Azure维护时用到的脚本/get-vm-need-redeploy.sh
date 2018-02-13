@@ -1,0 +1,2 @@
+az vm get-instance-view --ids $(az vm list --query "[].id" -o tsv) --query "[].[location,resourceGroup,name,instanceView.maintenanceRedeployStatus.maintenanceWindowStartTime]" -o table | grep china > 1.txt
+cat 1.txt | grep 2018 > 2.txt

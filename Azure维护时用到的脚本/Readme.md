@@ -1,0 +1,1 @@
+维护中的脚本，powershell和bash的都有

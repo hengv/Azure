@@ -1,0 +1,3 @@
+location,oldrgname,vmname,vnetrgname,vnetname,subnetname,newrgname,newvmname,vmsize,vmStorageType,osType,avsname
+chinanorth,hwcentos69,vm01,hwcentos69,hwcentos69-vnet,vlan1,new01,myvm01,Standard_A1,Standard_LRS,Linux,newavs1
+chinanorth,hwcentos69,vm02,hwcentos69,hwcentos69-vnet,vlan1,new01,myvm02,Standard_A1,Standard_LRS,Linux,newavs1

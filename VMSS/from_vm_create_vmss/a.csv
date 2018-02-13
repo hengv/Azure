@@ -1,0 +1,3 @@
+location,oldrgname,vmname,vnetrgname,vnetname,subnetname,newrgname,vmsize,vmStorageType,osType,osaccountname,ospassword,imagename,vmssname,numberofnode
+chinanorth,hwcentos69,vm01,hwcentos69,hwcentos69-vnet,vlan1,rgnew,Standard_A1,Standard_LRS,Linux,xxxx,xxxx,vm01-image,hwvmss01,2
+chinanorth,hwcentos69,vm02,hwcentos69,hwcentos69-vnet,vlan1,newrg,Standard_A1,Standard_LRS,Linux,xxxx,xxxx,vm02-image,hwvmss02,2
