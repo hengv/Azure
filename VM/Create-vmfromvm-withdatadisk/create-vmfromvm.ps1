@@ -1,0 +1,198 @@
+﻿function create-vmfromvm{
+  param(
+  [Parameter(Mandatory=$true)] 
+  [String]$csvfilepath
+  )
+    $csvfilepath = "d:\b.csv"
+    #导入CSV文件
+    $inputvalues = Import-Csv -Path $csvfilepath 
+    #$myinput = $inputvalues[0]
+    #对CSV中的内容逐条进行处理
+    foreach($myinput in $inputvalues){
+    $rgs = Get-AzureRmResourceGroup -Location $myinput.location
+    $rgmark = $false
+    foreach($rg in $rgs){
+      if($rg.ResourceGroupName -eq $myinput.newrgname){$rgmark = $true; break}
+    }
+    if(!$rgmark){
+    New-AzureRmResourceGroup -Name $myinput.newrgname -Location $myinput.location}
+
+    $avsname = $myinput.avsname
+    $avss = Get-AzureRmAvailabilitySet -ResourceGroupName $myinput.newrgname
+    $avsmark = $false
+    foreach($avs in $avss)
+    { if($avs.Name -eq $avsname){$avsmark = $true;break}
+    }
+    if(!$avsmark){$avs = New-AzureRmAvailabilitySet -ResourceGroupName $myinput.newrgname -Name $myinput.avsname -Location $myinput.location -Sku aligned -PlatformFaultDomainCount 2}
+
+    $oldvm = Get-AzureRmVM -ResourceGroupName $myinput.oldrgname -Name $myinput.vmname
+    if($myinput.vmStorageType -eq "Standard_LRS"){$sat = "StandardLRS"}else{$sat = "PremiumLRS"}
+    $sas = Get-AzureRmStorageAccount
+    if($oldvm.StorageProfile.OsDisk.ManagedDisk){
+       write-host true
+       $osdid = $oldvm.StorageProfile.OsDisk.ManagedDisk.Id
+       $oldosdiskname = $osdid.Split('/')[-1]
+       $oldosdisk = Get-AzureRmDisk -ResourceGroupName $myinput.oldrgname -DiskName $oldosdiskname
+       $osdiskname = $myinput.newvmname + "-os"
+       $osdiskconfig = New-AzureRmDiskConfig -SkuName $sat -OsType $myinput.osType -DiskSizeGB $oldosdisk.DiskSizeGB -CreateOption Copy -SourceResourceId $osdid -Location $myinput.location
+       $osdisk = New-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $osdiskname -Disk $osdiskconfig
+
+    }else
+    {write-host false
+        $osduri = $oldvm.StorageProfile.OsDisk.Vhd.Uri
+        $saname = $osduri.Split('/')[2].Split('.')[0] 
+        $sacname = $osduri.Split('/')[3]
+        $sactemp = $myinput.newvmname + 'temp' 
+        $vhdname = $osduri.Split('/')[-1]
+        
+        foreach($sa in $sas){
+          if($saname -eq $sa.StorageAccountName)
+          { break
+          }
+        }
+        $sa | New-AzureStorageContainer -Name $sactemp
+        $osdiskblob = $sa | Get-AzureStorageBlob -Container $sacname -Blob $vhdname
+
+        $sa | Get-AzureStorageBlob -Container $sacname -Blob $vhdname | Start-AzureStorageBlobCopy -DestContainer $sactemp
+
+        $newosdiskblob = $sa | Get-AzureStorageBlob -Container $sactemp -Blob $vhdname
+
+        $osdiskconfig = New-AzureRmDiskConfig -SkuName $sat -OsType $myinput.osType -DiskSizeGB ([math]::Ceiling($newosdiskblob.Length/1024/1024/1024)) -CreateOption Import -SourceUri $newosdiskblob.ICloudBlob.StorageUri.PrimaryUri.OriginalString -Location $myinput.location
+        $osdiskname = $myinput.newvmname + "-os"
+        $osdisk = New-AzureRmDisk -DiskName $osdiskname -ResourceGroupName $myinput.newrgname -Disk $osdiskconfig 
+        
+    }
+#####################data-disk begin#######################################
+    $olddatadisks = $oldvm.StorageProfile.DataDisks
+    $datadisks = @()
+    #$olddatadisk = $olddatadisks[0]
+    for($datadiski=1; $datadiski -le $olddatadisks.Count; $datadiski++ )
+    {   $daytime = Get-Date -UFormat "%Y%m%d"
+        #Get a random text as the random text 
+        $hash = $null 
+        for ($i = 0; $i -le 5; $i++){ 
+        $j = (48..57) | Get-Random -Count 1 | % {[char]$_} 
+        $hash = $hash + $j }
+        $datadiskname = $myinput.newvmname + "-data" + $datadiski +"-"+ $daytime +"-"+ $hash
+        if($oldvm.StorageProfile.OsDisk.ManagedDisk){
+            $mydatadiskconfig = New-AzureRmDiskConfig -SkuName $sat -DiskSizeGB $olddatadisks[$datadiski-1].DiskSizeGB -CreateOption Copy -SourceResourceId $olddatadisks[$datadiski-1].ManagedDisk.Id -Location $myinput.location 
+            $mydatadisk = New-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $datadiskname -Disk $mydatadiskconfig 
+        }
+        else{
+            $dduri = $olddatadisks[$datadiski-1].Vhd.Uri
+            $dsaname = $dduri.Split('/')[2].Split('.')[0] 
+            $dsacname = $dduri.Split('/')[3]
+            Write-Output $datadiski
+            $dsactemp = $myinput.newvmname + [string]$datadiski +'temp'
+            $dvhdname = $dduri.Split('/')[-1]
+            foreach($dsa in $sas){
+                if($dsaname -eq $dsa.StorageAccountName)
+                { break
+                }
+            }
+            $dsa | New-AzureStorageContainer -Name $dsactemp
+            $ddiskblob = $dsa | Get-AzureStorageBlob -Container $dsacname -Blob $dvhdname
+            $dsa | Get-AzureStorageBlob -Container $dsacname -Blob $dvhdname | Start-AzureStorageBlobCopy -DestContainer $dsactemp
+            $newddiskblob = $dsa | Get-AzureStorageBlob -Container $dsactemp -Blob $dvhdname
+            $ddiskconfig = New-AzureRmDiskConfig -SkuName $sat  -DiskSizeGB ([math]::Ceiling($newddiskblob.Length/1024/1024/1024)) -CreateOption Import -SourceUri $newddiskblob.ICloudBlob.StorageUri.PrimaryUri.OriginalString -Location $myinput.location
+            $mydatadisk = New-AzureRmDisk -DiskName $datadiskname -ResourceGroupName $myinput.newrgname -Disk $ddiskconfig
+        }
+        $datadisks = $datadisks + $mydatadisk
+    }
+#####################data-disk end#########################################
+    $vnet = Get-AzureRmVirtualNetwork -Name $myinput.vnetname -ResourceGroupName $myinput.vnetrgname
+    foreach($subnet in $vnet.Subnets){
+        if($subnet.name -eq $myinput.subnetname){
+        break
+        }
+    }
+    $vmpipname = $myinput.newvmname + "-pip"
+    $vmpip = New-AzureRmPublicIpAddress -Name $vmpipname -ResourceGroupName $myinput.newrgname -Location $myinput.location -AllocationMethod Dynamic
+    $vmnicname = $myinput.newvmname + "-nic"
+    $vmnic = New-AzureRmNetworkInterface -Name $vmnicname -ResourceGroupName $myinput.newrgname -Location $myinput.location -SubnetId $subnet.Id -PublicIpAddressId $vmpip.Id 
+    
+    $newvmname = $myinput.newvmname 
+    $size = $myinput.vmsize
+    #创建虚拟机
+    #定义VM大小
+    $newvm = New-AzureRmVMConfig -VMName $newvmname -VMSize $Size -AvailabilitySetId $avs.Id
+    #定义OS盘 
+    if($myinput.osType -eq "Linux")
+    {$newvm = Set-AzureRmVMOSDisk -VM $newvm  -ManagedDiskId $osdisk.Id -CreateOption Attach -Linux  -StorageAccountType $sat}
+    elseif($myinput.osType -eq "Windows")
+    {$newvm = Set-AzureRmVMOSDisk -VM $newvm  -ManagedDiskId $osdisk.Id -CreateOption Attach -Windows  -StorageAccountType $sat}else
+    {Write-Output "osType should be Linux or Windows";exit}
+    #定义Data盘
+    #for($i=1; $i -le $datadisks.Count; $i++ )
+    #{
+    #    write-output $i
+    #    write-output $datadisks[$i-1].id
+    #    $lun = $i + 1
+    #    $newvm = Add-AzureRmVMDataDisk -VM $newvm -ManagedDiskId $datadisks[$i-1].id -Lun $lun -CreateOption Attach -StorageAccountType $sat -Name $datadisks[$i-1].name
+    # }
+    #添加启动监控存储账户信息
+    $bdsamark = $false
+    foreach($bdsa in $sas){
+      if($myinput.DiagStorageAccountName -eq $bdsa.StorageAccountName){$bdsamark = $true; break}
+    }
+    if(!$bdsamark){
+    New-AzureRmStorageAccount -ResourceGroupName $myinput.newrgname -Name $myinput.DiagStorageAccountName -SkuName Standard_LRS -Location $myinput.location
+    $bdsa = Get-AzureRmStorageAccount -ResourceGroupName $myinput.newrgname -name $myinput.DiagStorageAccountName}
+    
+    Write-Output $bdsa.ResourceGroupName, $bdsa.StorageAccountName
+    $newvm = Set-AzureRmVMBootDiagnostics $newvm -Enable -ResourceGroupName $bdsa.ResourceGroupName -StorageAccountName $bdsa.StorageAccountName
+    #添加网卡
+    $newvm = Add-AzureRmVMNetworkInterface -VM $newvm -Id $vmnic.id -Primary
+    #创建VM
+    $newvm = new-azurermvm -ResourceGroupName $myinput.newrgname -Location $myinput.location -VM $newvm 
+    
+    ##############################添加Data盘###############################
+    $newvm = Get-AzureRmVM -ResourceGroupName $myinput.newrgname -Name $myinput.newvmname
+    for($i=1; $i -le $datadisks.Count; $i++ )
+    {
+        write-output $i
+        write-output $datadisks[$i-1].id
+        Write-Output $datadisks[$i-1].name
+        Write-Output $datadisks[$i-1].DiskSizeGB
+        $lun = $i + 1
+        $newvm = Add-AzureRmVMDataDisk -VM $newvm -ManagedDiskId $datadisks[$i-1].id -Lun $lun -CreateOption Attach -StorageAccountType $sat -Name $datadisks[$i-1].name
+     }
+        
+    Update-AzureRmVM -VM $newvm -ResourceGroupName $myinput.newrgname
+    Restart-AzureRmVM  -ResourceGroupName $myinput.newrgname -Name $myinput.newvmname 
+        
+    #########################################################################
+ if(!$oldvm.StorageProfile.OsDisk.ManagedDisk){
+    $osduri = $oldvm.StorageProfile.OsDisk.Vhd.Uri
+    $saname = $osduri.Split('/')[2].Split('.')[0] 
+    $sactemp = $myinput.newvmname + 'temp' 
+    $vhdname = $osduri.Split('/')[-1]
+    $sas = Get-AzureRmStorageAccount
+    foreach($sa in $sas){
+       if($saname -eq $sa.StorageAccountName)
+       { break
+       }
+     }
+     $sa | Remove-AzureStorageBlob -Container $sactemp -Blob $vhdname -Force
+     $sa | Remove-AzureStorageContainer -name $sactemp -Force
+
+
+        $olddatadisks = $oldvm.StorageProfile.DataDisks
+        for($datadiski=1; $datadiski -le $olddatadisks.Count; $datadiski++ )
+        {   $dduri = $olddatadisks[$datadiski-1].Vhd.Uri
+            $dsaname = $dduri.Split('/')[2].Split('.')[0] 
+            $dsactemp = $myinput.newvmname + [string]$datadiski +'temp'
+            $dvhdname = $dduri.Split('/')[-1]
+            foreach($dsa in $sas){
+                if($dsaname -eq $dsa.StorageAccountName)
+                { break
+                }
+            }
+            $dsa | Remove-AzureStorageBlob -Container $dsactemp -Blob $dvhdname -Force
+            $dsa | Remove-AzureStorageContainer -name $dsactemp -Force
+          }
+      }
+   }
+}
+$csvfilepath = "d:\b.csv"
+create-vmfromvm -csvfilepath $csvfilepath
