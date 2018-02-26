@@ -3,7 +3,7 @@
   [Parameter(Mandatory=$true)] 
   [String]$csvfilepath
   )
-    $csvfilepath = "d:\b.csv"
+    $csvfilepath = "D:\Heng\Documents\Git\Azure\VM\Create-vmfromvm-withdatadisk\b.csv"
     #导入CSV文件
     $inputvalues = Import-Csv -Path $csvfilepath 
     #$myinput = $inputvalues[0]
