@@ -1,2 +1,2 @@
-location,oldrgname,vmname,vnetrgname,vnetname,subnetname,newrgname,newvmname,vmsize,vmStorageType,newCtrName,osType,avsname
-chinanorth,hwcentos69,vm02,hwcentos69,hwcentos69-vnet,vlan1,hw01,hwvm06,Standard_A1,Standard_LRS,testhwvm06sa,Linux,hwavs1
+location,oldrgname,vmname,vnetrgname,vnetname,subnetname,newrgname,newvmname,DiagStorageAccountName,vmsize,vmStorageType,osType,avsname
+chinanorth,hwcentos69,vm02,hwcentos69,hwcentos69-vnet,vlan1,hw04,hwcentvm04,hw04diag,Standard_A1,Standard_LRS,Linux,hwavs1
