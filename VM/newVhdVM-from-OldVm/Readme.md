@@ -1,19 +1,17 @@
-±¾Ä¿Â¼ÓĞÈı¸öÎÄ¼ş£º
-b.csv
-create-vhdvmfromvhdvm.ps1
-create-vhdvmfromvhdvmdiffsa.ps1
-ÆäÖĞb.csvÊÇÅäÖÃÎÄ¼ş£¬create-vhdvmfromvhdvm.ps1ºÍcreate-vhdvmfromvhdvmdiffsa.ps1Á½¸öÎÄ¼ş¶ÁÈ¡b.csvÕâ¸öÅäÖÃÎÄ¼şÖĞµÄ²ÎÊı½øĞĞvmµÄ¸´ÖÆ¡£
-²ÎÊıËµÃ÷£º
-location£ºchinanort»òchinaeast
-oldrgname£ºÔ´VMµÄ×ÊÔ´×éÃû³Æ
-vmname£ºÔ´VMµÄÃû³Æ
-vnetrgname£ºĞÂVM½«Òª¼ÓÈëµÄVNETµÄ×ÊÔ´×éÃû³Æ	
-vnetname£ºĞÂVM½«Òª¼ÓÈëµÄVNETµÄÃû³Æ
-subnetname£ºĞÂVM½«Òª¼ÓÈëµÄSubnetÃû³Æ
-newrgname£ºĞÂVMµÄ×ÊÔ´×éÃû³Æ£¬Èç¹ûÃ»ÓĞ½«ĞÂ½¨
-newvmname£ºĞÂVMµÄÃû³Æ
-DiagStorageAccountName£ºĞÂVMÕï¶ÏµÄ´æ´¢ÕË»§Ãû³Æ£¬Èç¹ûÃ»ÓĞÕâ¸ö´æ´¢ÕË»§£¬½«ĞÂ½¨	
-vmsize£ºĞÂVMµÄĞÍºÅ
-vmStorageType£ºĞÂVMµÄ´æ´¢ÀàĞÍ£¬Standard_LRS»òPremium_LRS
-osType£ºLinux»òWindows
-avsname£ºAvailability SetµÄÃû³Æ£¬Èç¹ûÃ»ÓĞ½«ĞÂ½¨
+æœ¬ç›®å½•æœ‰ä¸‰ä¸ªæ–‡ä»¶ï¼š
+b.csvï¼Œcreate-vhdvmfromvhdvm.ps1ï¼Œcreate-vhdvmfromvhdvmdiffsa.ps1
+å…¶ä¸­b.csvæ˜¯é…ç½®æ–‡ä»¶ï¼Œcreate-vhdvmfromvhdvm.ps1å’Œcreate-vhdvmfromvhdvmdiffsa.ps1ä¸¤ä¸ªæ–‡ä»¶è¯»å–b.csvè¿™ä¸ªé…ç½®æ–‡ä»¶ä¸­çš„å‚æ•°è¿›è¡Œvmçš„å¤åˆ¶ã€‚
+å‚æ•°è¯´æ˜ï¼š
+locationï¼šchinanortæˆ–chinaeast
+oldrgnameï¼šæºVMçš„èµ„æºç»„åç§°
+vmnameï¼šæºVMçš„åç§°
+vnetrgnameï¼šæ–°VMå°†è¦åŠ å…¥çš„VNETçš„èµ„æºç»„åç§°	
+vnetnameï¼šæ–°VMå°†è¦åŠ å…¥çš„VNETçš„åç§°
+subnetnameï¼šæ–°VMå°†è¦åŠ å…¥çš„Subnetåç§°
+newrgnameï¼šæ–°VMçš„èµ„æºç»„åç§°ï¼Œå¦‚æœæ²¡æœ‰å°†æ–°å»º
+newvmnameï¼šæ–°VMçš„åç§°
+DiagStorageAccountNameï¼šæ–°VMè¯Šæ–­çš„å­˜å‚¨è´¦æˆ·åç§°ï¼Œå¦‚æœæ²¡æœ‰è¿™ä¸ªå­˜å‚¨è´¦æˆ·ï¼Œå°†æ–°å»º	
+vmsizeï¼šæ–°VMçš„å‹å·
+vmStorageTypeï¼šæ–°VMçš„å­˜å‚¨ç±»å‹ï¼ŒStandard_LRSæˆ–Premium_LRS
+osTypeï¼šLinuxæˆ–Windows
+avsnameï¼šAvailability Setçš„åç§°ï¼Œå¦‚æœæ²¡æœ‰å°†æ–°å»º
