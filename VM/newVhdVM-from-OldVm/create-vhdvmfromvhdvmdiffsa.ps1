@@ -1,14 +1,14 @@
-﻿    function create-vhdVmFromVhdVmDiffsa{
-    param(
-    [Parameter(Mandatory=$true)] 
-    [String]$csvfilepath
-    )
-    $csvfilepath = "D:\Heng\Documents\Git\Azure\VM\newVhdVM-from-OldVm\b.csv"
-    #导入CSV文件
-    $inputvalues = Import-Csv -Path $csvfilepath 
-    #$myinput = $inputvalues[0]
-    #对CSV中的内容逐条进行处理
-    foreach($myinput in $inputvalues){
+﻿function create-vhdVmFromVhdVmDiffsa{
+  param(
+  [Parameter(Mandatory=$true)] 
+  [String]$csvfilepath
+  )
+  #$csvfilepath = "D:\Heng\Documents\Git\Azure\VM\newVhdVM-from-OldVm\diffsa.csv"
+  #导入CSV文件
+  $inputvalues = Import-Csv -Path $csvfilepath 
+  #$myinput = $inputvalues[0]
+  #对CSV中的内容逐条进行处理
+  foreach($myinput in $inputvalues){
     $rgs = Get-AzureRmResourceGroup -Location $myinput.location
     $rgmark = $false
     foreach($rg in $rgs){
@@ -28,16 +28,19 @@
     $oldvm = Get-AzureRmVM -ResourceGroupName $myinput.oldrgname -Name $myinput.vmname
     #对DISK的类型定义进行转换
     if($myinput.vmStorageType -eq "Standard_LRS"){$sat = "StandardLRS"}else{$sat = "PremiumLRS"}
+    if($myinput.SameSA -eq "yes"){$samesa = $true}else{$samesa = $false}
+    
+    $sas = Get-AzureRmStorageAccount
     $osduri = $oldvm.StorageProfile.OsDisk.Vhd.Uri
     $saname = $osduri.Split('/')[2].Split('.')[0]  
     $sacname = $osduri.Split('/')[3]
     $vhdname = $osduri.Split('/')[-1]
-    $sas = Get-AzureRmStorageAccount
+    
     foreach($sa in $sas){
         if($saname -eq $sa.StorageAccountName)
         { break
         }
-    }
+    }    
     ################定义新的SA和Container名#########################
     #时间信息
     $daytime = Get-Date -UFormat "%y%m%d"
@@ -50,26 +53,39 @@
     $hash = $hash + $j }
     $newctrname = $myinput.newvmname + $daytime + $hash
     #$newctrname = $myinput.newCtrName
+    if($samesa){$newsa = $sa}
+    else{if($myinput.randomSaName -eq "yes"){$newsaname = $newctrname}
+         else{$newsaname = $myinput.SAName}
+    }
     ##############定义结束############################################
     $sa | New-AzureStorageContainer -Name $newctrname
     $osdiskblob = $sa | Get-AzureStorageBlob -Container $sacname -Blob $vhdname
-
-    $newsa = New-AzureRmStorageAccount -ResourceGroupName $myinput.newrgname -Name $newctrname -Location $myinput.location -SkuName $myinput.vmStorageType 
-
-    $newsa | New-AzureStorageContainer -Name $newctrname
-
+    if(!$samesa){
+        $newsamark = $false
+        foreach($newsa in $sas){
+          if($newsaname -eq $newsa.StorageAccountName){$newsamark = $true; break}
+        }
+        if(!$newsamark){
+        $newsa = New-AzureRmStorageAccount -ResourceGroupName $myinput.newrgname -Name $newsaname -SkuName $myinput.vmStorageType -Location $myinput.location} 
+        $newsa | New-AzureStorageContainer -Name $newctrname
+        }
     $sa | Get-AzureStorageBlob -Container $sacname -Blob $vhdname | Start-AzureStorageBlobCopy  -DestContainer $newctrname  
 
     $temposblob = $sa | Get-AzureStorageBlob -Container $newctrname -Blob $vhdname
-    
-    $temposblob | Start-AzureStorageBlobCopy  -DestContainer $newctrname -DestContext $newsa.Context 
-    while($true){
-    $copystatus = Get-AzureStorageBlobCopyState  -Container $newctrname -Context $newsa.Context -Blob $vhdname
+    if(!$samesa){
+        $temposblob | Start-AzureStorageBlobCopy  -DestContainer $newctrname -DestContext $newsa.Context 
+        while($true){
+        $copystatus = Get-AzureStorageBlobCopyState  -Container $newctrname -Context $newsa.Context -Blob $vhdname
 
-    if($copystatus.Status -eq "Success"){write-output "Vhd Copy Success";break}else{Write-Output "Still copy Vhd, wait..."; Start-Sleep -s 5}
+        if($copystatus.Status -eq "Success"){write-output "Vhd Copy Success";break}else{Write-Output "Still copy Vhd, wait..."; Start-Sleep -s 5}
+        }
+        $newosdiskblob = $newsa | Get-AzureStorageBlob -Container $newctrname -Blob $vhdname
+    }else
+    {
+        $newosdiskblob = $temposblob
     }
 
-    $newosdiskblob = $newsa | Get-AzureStorageBlob -Container $newctrname -Blob $vhdname
+    
     $newosdiskuri = $newosdiskblob.ICloudBlob.StorageUri.PrimaryUri.AbsoluteUri
 
     ###################复制data disk###############################################################
@@ -78,12 +94,6 @@
     $datadisks = @()
     for($datadiski=1; $datadiski -le $olddatadisks.Count; $datadiski++ )
     {   
-        #磁盘名称中加入随机数 
-        $hash = $null 
-        for ($i = 0; $i -le 5; $i++){ 
-        $j = (48..57) | Get-Random -Count 1 | % {[char]$_} 
-        $hash = $hash + $j }
-        $datadiskname = $myinput.newvmname + "-data" + $datadiski +"-"+ $daytime +"-"+ $hash
         #对数据盘进行复制
         $dduri = $olddatadisks[$datadiski-1].Vhd.Uri
         $dsaname = $dduri.Split('/')[2].Split('.')[0] 
@@ -96,15 +106,18 @@
             }
         }
         $ddiskblob = $dsa | Get-AzureStorageBlob -Container $dsacname -Blob $dvhdname
-        $dsa | Get-AzureStorageBlob -Container $dsacname -Blob $dvhdname | Start-AzureStorageBlobCopy -DestContainer $newctrname
+        $dsa | Get-AzureStorageBlob -Container $dsacname -Blob $dvhdname | Start-AzureStorageBlobCopy -DestContainer $newctrname 
         $tempddiskblob = $dsa | Get-AzureStorageBlob -Container $newctrname -Blob $dvhdname
-        $tempddiskblob | Start-AzureStorageBlobCopy -DestContainer $newctrname -DestContext $newsa.Context
-        while($true){
-            $copystatus = Get-AzureStorageBlobCopyState  -Container $newctrname -Context $newsa.Context -Blob $dvhdname
-            if($copystatus.Status -eq "Success"){write-output "Vhd Copy Success";break}else{Write-Output "Still copy Vhd, wait..."; Start-Sleep -s 5}
-        }
+        if($dsa.StorageAccountName -ne $newsa.StorageAccountName){
+            $tempddiskblob | Start-AzureStorageBlobCopy -DestContainer $newctrname -DestContext $newsa.Context
+            while($true){
+                $copystatus = Get-AzureStorageBlobCopyState  -Container $newctrname -Context $newsa.Context -Blob $dvhdname
+                if($copystatus.Status -eq "Success"){write-output "Vhd Copy Success";break}else{Write-Output "Still copy Vhd, wait..."; Start-Sleep -s 5}
+            }
 
-        $newddiskblob = $newsa | Get-AzureStorageBlob -Container $newctrname -Blob $dvhdname
+            $newddiskblob = $newsa | Get-AzureStorageBlob -Container $newctrname -Blob $dvhdname
+        }else{
+            $newddiskblob = $tempddiskblob}
         $newddiskuri = $newddiskblob.ICloudBlob.StorageUri.PrimaryUri.AbsoluteUri
         #把生成的新磁盘，加入到磁盘数组中
         $datadisks = $datadisks + $newddiskuri
@@ -149,6 +162,7 @@
     $bdsa = Get-AzureRmStorageAccount -ResourceGroupName $myinput.newrgname -name $myinput.DiagStorageAccountName}
     #输出监控存储账户的信息
     Write-Output $bdsa.ResourceGroupName, $bdsa.StorageAccountName
+    $newvm = Set-AzureRmVMBootDiagnostics $newvm -Enable -ResourceGroupName $bdsa.ResourceGroupName -StorageAccountName $bdsa.StorageAccountName
     #添加网卡
     $newvm = Add-AzureRmVMNetworkInterface -VM $newvm -Id $vmnic.id -Primary
     #创建临时VM
@@ -169,7 +183,7 @@
     Restart-AzureRmVM  -ResourceGroupName $myinput.newrgname -Name $myinput.newvmname 
     #################添加结束#########################################
     #################删除过程中产生的临时vhd文件######################
-     
+    if(!$samesa){
        #删除OS的临时vhd文件
        $osduri = $oldvm.StorageProfile.OsDisk.Vhd.Uri
        $saname = $osduri.Split('/')[2].Split('.')[0] 
@@ -192,10 +206,10 @@
             if($dsa.StorageAccountName -ne $sa.StorageAccountName){
                 $dsa | Remove-AzureStorageContainer -name $newctrname -Force}
             }
-          
+        }  
   }
 }
 
-$csvfilepath = "D:\Heng\Documents\Git\Azure\VM\newVhdVM-from-OldVm\b.csv"
+$csvfilepath = "D:\Heng\Documents\Git\Azure\VM\newVhdVM-from-OldVm\diffsa.csv"
 
 create-vhdVmFromVhdVmDiffsa -csvfilepath $csvfilepath

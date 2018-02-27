@@ -1,0 +1,2 @@
+location,oldrgname,vmname,vnetrgname,vnetname,subnetname,newrgname,newvmname,DiagStorageAccountName,vmsize,vmStorageType,osType,avsname,SameSA,randomSaName,SAName
+chinanorth,hwcentos69,vm02,hwcentos69,hwcentos69-vnet,vlan1,test01,hwcent01,diaghw07,Standard_A1,Standard_LRS,Linux,hwavs1,yes,yes,hwcentvm07
