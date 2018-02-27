@@ -1,12 +1,12 @@
-﻿    #function create-vhdVmFromVhdVmDiffsa{
-    #param(
-    #[Parameter(Mandatory=$true)] 
-    #[String]$csvfilepath
-    #)
+﻿    function create-vhdVmFromVhdVmDiffsa{
+    param(
+    [Parameter(Mandatory=$true)] 
+    [String]$csvfilepath
+    )
     $csvfilepath = "D:\Heng\Documents\Git\Azure\VM\newVhdVM-from-OldVm\b.csv"
     #导入CSV文件
     $inputvalues = Import-Csv -Path $csvfilepath 
-    $myinput = $inputvalues[0]
+    #$myinput = $inputvalues[0]
     #对CSV中的内容逐条进行处理
     foreach($myinput in $inputvalues){
     $rgs = Get-AzureRmResourceGroup -Location $myinput.location
@@ -194,8 +194,8 @@
             }
           
   }
-#}
+}
 
-#$csvfilepath = "D:\Heng\Documents\Git\Azure\VM\newVhdVM-from-OldVm\b.csv"
+$csvfilepath = "D:\Heng\Documents\Git\Azure\VM\newVhdVM-from-OldVm\b.csv"
 
-#create-vhdVmFromVhdVmDiffsa -csvfilepath $csvfilepath
+create-vhdVmFromVhdVmDiffsa -csvfilepath $csvfilepath
