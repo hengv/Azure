@@ -4,53 +4,68 @@
     [String]$csvfilepath
     )
 
-    
+   # $csvfilepath = "d:\a.csv"
     #导入CSV文件
     $inputvalues = Import-Csv -Path $csvfilepath 
 
     #对CSV中的内容逐条进行处理
-    foreach($myinput in $inputvalues){
+  foreach($myinput in $inputvalues){
+    #$myinput = $inputvalues[0]
     $rgs = Get-AzureRmResourceGroup -Location $myinput.location
     $rgmark = $false
     foreach($rg in $rgs){
       if($rg.ResourceGroupName -eq $myinput.newrgname){$rgmark = $true; break}
     }
+    
     if(!$rgmark){
     New-AzureRmResourceGroup -Name $myinput.newrgname -Location $myinput.location}
-
+    #获得源VM的信息
     $oldvm = Get-AzureRmVM -ResourceGroupName $myinput.oldrgname -Name $myinput.vmname
+    #对DISK的类型进行转换
+    if($myinput.vmStorageType -eq "Standard_LRS"){$sat = "Standard_LRS"}else{$sat = "Premium_LRS"}
 
     if($oldvm.StorageProfile.OsDisk.ManagedDisk){
-       write-host true
+       write-host "Copying OS Disk"
        $osdid = $oldvm.StorageProfile.OsDisk.ManagedDisk.Id
        $oldosdiskname = $osdid.Split('/')[-1]
        $oldosdisk = Get-AzureRmDisk -ResourceGroupName $myinput.oldrgname -DiskName $oldosdiskname
        $osdiskname = $oldvm.Name + "-os"
-       $osdiskconfig = New-AzureRmDiskConfig -SkuName StandardLRS -OsType $myinput.osType -DiskSizeGB $oldosdisk.DiskSizeGB -CreateOption Copy -SourceResourceId $osdid -Location $myinput.location
+       $osdiskconfig = New-AzureRmDiskConfig -SkuName $sat -OsType $myinput.osType -DiskSizeGB $oldosdisk.DiskSizeGB -CreateOption Copy -SourceResourceId $osdid -Location $myinput.location
        $osdisk = New-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $osdiskname -Disk $osdiskconfig
 
     }else
     {write-host false
-        $osduri = $oldvm.StorageProfile.OsDisk.Vhd.Uri
-        $saname = $osduri.Split('/')[2].Split('.')[0]  
-        $vhdname = $osduri.Split('/')[-1]
-        $sas = Get-AzureRmStorageAccount
-        foreach($sa in $sas){
-          if($saname -eq $sa.StorageAccountName)
-          { break
-          }
+     write-output "not support VHD disk anymore"
+     
         }
-        $sa | New-AzureStorageContainer -Name temp
-        $osdiskblob = $sa | Get-AzureStorageBlob -Container vhds -Blob $vhdname
-
-        $sa | Get-AzureStorageBlob -Container vhds -Blob $vhdname | Start-AzureStorageBlobCopy -DestContainer temp
-
-        $newosdiskblob = $sa | Get-AzureStorageBlob -Container temp -Blob $vhdname
-
-        $osdiskconfig = New-AzureRmDiskConfig -SkuName StandardLRS -OsType $myinput.osType -DiskSizeGB ([math]::Ceiling($newosdiskblob.Length/1024/1024/1024)) -CreateOption Import -SourceUri $newosdiskblob.ICloudBlob.StorageUri.PrimaryUri.OriginalString -Location $myinput.location
-        $osdiskname = $newosdiskblob.Name.Split('.')[0]
-        $osdisk = New-AzureRmDisk -DiskName $osdiskname -ResourceGroupName $myinput.newrgname -Disk $osdiskconfig 
+#####################data-disk begin#######################################
+    #对数据盘进行复制
+    $olddatadisks = $oldvm.StorageProfile.DataDisks
+    $datadisks = @()
+    for($datadiski=1; $datadiski -le $olddatadisks.Count; $datadiski++ )
+    {   
+        Write-Output "Copying Data Disk"
+        #磁盘名称中加入时间信息
+        $daytime = Get-Date -UFormat "%Y%m%d"
+        #磁盘名称中加入随机数 
+        $hash = $null 
+        for ($i = 0; $i -le 5; $i++){ 
+        $j = (48..57) | Get-Random -Count 1 | % {[char]$_} 
+        $hash = $hash + $j }
+        $datadiskname = $oldvm.Name + "-data" + $datadiski +"-"+ $daytime +"-"+ $hash
+        #根据数据盘的类型，进行复制，最后都生成托管磁盘，复制过程和OS盘类似
+        if($oldvm.StorageProfile.OsDisk.ManagedDisk){
+            $mydatadiskconfig = New-AzureRmDiskConfig -SkuName $sat -DiskSizeGB $olddatadisks[$datadiski-1].DiskSizeGB -CreateOption Copy -SourceResourceId $olddatadisks[$datadiski-1].ManagedDisk.Id -Location $myinput.location 
+            $mydatadisk = New-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $datadiskname -Disk $mydatadiskconfig 
         }
+        else{
+            write-output "not support VHD disk anymore"
+           
+        }
+        #把生成的新磁盘，加入到磁盘数组中
+        $datadisks = $datadisks + $mydatadisk
+    }
+#####################data-disk end#########################################
 
         $vnet = Get-AzureRmVirtualNetwork -Name $myinput.vnetname -ResourceGroupName $myinput.vnetrgname
         
@@ -70,19 +85,30 @@
     #定义VM大小
     $tmpvm = New-AzureRmVMConfig -VMName $tmpvmname -VMSize $Size
     #定义OS盘 
-    $tmpvm = Set-AzureRmVMOSDisk -VM $tmpvm  -ManagedDiskId $osdisk.Id -CreateOption Attach -Linux -StorageAccountType StandardLRS
+    $tmpvm = Set-AzureRmVMOSDisk -VM $tmpvm  -ManagedDiskId $osdisk.Id -CreateOption Attach -Linux -StorageAccountType $sat
     #添加Data盘
     #$tmpvm = Add-AzureRmVMDataDisk -VM $tmpvm -ManagedDiskId $datadisk.Id -Lun 1 -CreateOption Attach -StorageAccountType StandardLRS
     #添加网卡
     $tmpvm = Add-AzureRmVMNetworkInterface -VM $tmpvm -Id $vmnic.id -Primary
     #创建临时VM
     $tmpvm = new-azurermvm -ResourceGroupName $myinput.newrgname -Location $myinput.location -VM $tmpvm
+    $tmpvm = Get-AzureRmVM -ResourceGroupName $myinput.newrgname -Name $tmpvmname
         
+    #添加数据盘
+    for($i=1; $i -le $datadisks.Count; $i++ )
+    {
+        $lun = $i + 1
+        $tmpvm = Add-AzureRmVMDataDisk -VM $tmpvm -ManagedDiskId $datadisks[$i-1].id -Lun $lun -CreateOption Attach -StorageAccountType $sat -Name $datadisks[$i-1].name
+     }
+        
+    Update-AzureRmVM -VM $tmpvm -ResourceGroupName $myinput.newrgname
+    Restart-AzureRmVM  -ResourceGroupName $myinput.newrgname -Name $tmpvmname  
+    
     #获取pip地址
-    sleep(60)
     $pip = Get-AzureRmPublicIpAddress -ResourceGroupName $myinput.newrgname -Name $vmpipname
 
     #ssh到VM中，进行Generalize
+    sleep(60)
     $sUser = $myinput.osaccountname
     $cPassword = $myinput.ospassword
     $sPassword = $cPassword | ConvertTo-SecureString -AsPlainText -Force 
@@ -100,7 +126,6 @@
     }
 
     $sReturn = $stream.Read()
-    $stream.WriteLine("echo abc@12345678 | passwd root --stdin")
     $stream.WriteLine("echo yes | waagent -deprovision+user")
     sleep -s 2
     $sReturn = $stream.Read()
@@ -122,15 +147,23 @@
     remove-azurermvm -ResourceGroupName $myinput.newrgname -Name $tmpvmname -Force
     Remove-AzureRmNetworkInterface -ResourceGroupName $myinput.newrgname -Name $vmnicname -Force
     Remove-AzureRmPublicIpAddress -ResourceGroupName $myinput.newrgname -Name $vmpipname -Force
+    write-output "deleting tempvm os disk"
     Remove-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $osdiskname -Force
-    #Remove-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $datadiskname -Force
-    #$newosdiskblob = $sa | Get-AzureStorageBlob -Container temp -Blob $vhdname
-    if(!$oldvm.StorageProfile.OsDisk.ManagedDisk){
-    $sa | Remove-AzureStorageBlob -Container temp -Blob $vhdname -Force
-    $sa | Remove-AzureStorageContainer -Name temp}
+    write-output $datadisks.Count
+    for($i=1; $i -le $datadisks.Count; $i++ )
+    {
+        write-output "deleting tempvm data disk"
+        write-output $i
+        write-output $datadisks[$i-1].id
+        Write-Output $datadisks[$i-1].name
+        Write-Output $datadisks[$i-1].DiskSizeGB
+        Remove-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $datadisks[$i-1].name -Force
+    }
+    
   }
    
 }
+
 function create-vmssfromimage{
 param(
 [Parameter(Mandatory=$true)] 
@@ -150,9 +183,10 @@ param(
     $numberofnodes = $myinput.numberofnode
     $adminUsername = $myinput.osaccountname;
     $adminPassword = $myinput.ospassword;
-    $Size = "Standard_A1"
+    $Size = $myinput.vmsize
     $vmssName =  $myinput.vmssname;
-   
+    #对DISK的类型进行转换
+    if($myinput.vmStorageType -eq "Standard_LRS"){$sat = "Standard_LRS"}else{$sat = "Premium_LRS"}
 
 
 
@@ -232,7 +266,7 @@ param(
 　　　　    -AdminUsername $adminUsername -AdminPassword $adminPassword `
 　　    | Set-AzureRmVmssStorageProfile -OsDiskCreateOption 'FromImage' `
 　　　　    -OsDiskCaching 'None' -OsDiskOsType Linux  `
-　　　　    -ManagedDisk StandardLRS -ImageReferenceId $image.Id 
+　　　　    -ManagedDisk $sat -ImageReferenceId $image.Id 
 
     New-AzureRmVmss -ResourceGroupName $rg -Name $vmssName -VirtualMachineScaleSet $vmss
 
