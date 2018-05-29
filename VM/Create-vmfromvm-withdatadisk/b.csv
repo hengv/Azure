@@ -1,3 +1,2 @@
 location,oldrgname,vmname,vnetrgname,vnetname,subnetname,newrgname,newvmname,DiagStorageAccountName,vmsize,vmStorageType,osType,avsname
-chinanorth,hwcentos69,vm01,hwcentos69,hwcentos69-vnet,vlan1,new03,new03vm01,new03vm01diag,Standard_A1,Standard_LRS,Linux,new01
-chinanorth,hwcentos69,vm02,hwcentos69,hwcentos69-vnet,vlan1,vhd03,vhd03vm01,vhd03vm01diag,Standard_A1,Standard_LRS,Linux,new01
+CentralIndia,BYTEDANCE,bytedancevm01,hwcentos69,bytedance-vnet,default,BYTEDANCE,bytedancevm11,bytedancevm1diag,Standard_D32s_v3,Premium_LRS,Linux,avs1
