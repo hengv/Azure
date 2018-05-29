@@ -153,10 +153,6 @@
     for($i=1; $i -le $datadisks.Count; $i++ )
     {
         write-output "deleting tempvm data disk"
-        write-output $i
-        write-output $datadisks[$i-1].id
-        Write-Output $datadisks[$i-1].name
-        Write-Output $datadisks[$i-1].DiskSizeGB
         Remove-AzureRmDisk -ResourceGroupName $myinput.newrgname -DiskName $datadisks[$i-1].name -Force
     }
     
